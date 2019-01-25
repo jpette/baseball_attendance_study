@@ -1,0 +1,396 @@
+---
+title: "A Study of Baseball Attendance: the Effects of Winning and Top-End Player Acquisitions"
+author: "John Pette"
+output:
+  pdf_document:
+    latex_engine: pdflatex
+    
+  header-includes: \usepackage[usenames, dvipsnames]{color}
+                    \pagenumbering{arabic}
+
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+```
+
+```{r, include=FALSE}
+library(dplyr)
+library(stargazer)
+library(kableExtra)
+library(ggplot2)
+library(sandwich)
+library(lmtest)
+```
+
+**Introduction**
+
+This is a statistical examination of one of the factors most critical to measuring a major league team's success: attendance, the most direct driver of a team's revenue. In my analysis, I sought to answer several questions. The first two were fairly obvious:
+
+1.	What is the relationship between team wins and attendance?
+2.	How does winning a league pennant or World Series relate to attendance?
+
+The deeper, more intriguing questions I wanted to address were related to payroll and high-end player acquisitions:
+
+3.	Is there a relationship between payroll and attendance?
+4.	How does a top-end player acquisition relate to attendance? 
+
+I chose to look at the years 2000-2017, as that 18-year period would allow for an adequate number of data points (540), while covering the period containing all modern mega-contracts. I should note that this is an observational study, so it cannot make any causal conclusions.
+
+**Methodology and Data**
+
+First, let's examine attendance itself. Attendance figures are far from perfect. If a game sells out, there is an artificial cap on the attendance figure for that game, and it ceases to be a good measure of demand. However, the number of sellouts in baseball is fairly negligible when compared to the overall quantity of games played, so the straight attendance figures are likely the best measure. They certainly represent the most practical measure - I looked at using attendance as a percentage of overall capacity, but reading my interpretations of relationships between anything and attendance percentages would have driven most of my readers to violence, so I stayed with the straight attendance figures.
+
+My starting point for data was the Teams table from the 2017 version of the Lahman database (available at seanlahman.com, copyright 1996-2018 by Sean Lahman). This is a very clean data set, which cut down tremendously on data clean up. However, while the Lahman database is a phenomenal resource, there were additional variables I wanted to assess, so I had to compile data from other sources.
+
+Payroll: To examine team payroll, I pulled the Opening Day payroll figures from Cot's Baseball Contracts, which, conveniently enough, covered the precise years I was examining, 2000-2017. In order to be comparable, though, the payroll figures needed to be in constant dollars, so I adjusted them all to 2017 equivalent amounts using a calculator based on the consumer price indices for the years in question.
+
+The Lahman database provides indicator variables showing whether a team won the World Series, League Championship Series, or Wild Card game in a given year. I thought these would be interesting, but attendance effects during those years would likely be captured by the wins variable. In lieu of these, I created new lag variables to show whether a team won the World Series or league pennant in the previous year, making the assumption that we could see more of an effect of success after the fact.I also added an indicator variable to show whether a team had won the league pennant last year, but lost the World Series. This made the two variables mutually exclusive and eliminated the need for interaction terms between them.
+
+I created an additional indicator variable to show whether a team opened a new ballpark in a given year. We can generally assume that we would see an attendance spike in those years, but I wanted to build it into the model. 
+
+Finally, I add two more indicator variables to track top-end acquisitions: one to show whether a team made a top-end player acquisition, by signing a free agent or through a trade, in the off-season before a given year. The other shows whether a team made a mid-season trade to acquire a top-end player. This is the only subjective field in my analysis, and I will discuss it in more depth below.
+
+Now, let's load the data and look at the top few rows.
+
+```{r}
+# Load the Teams table from the Lahman Database, 2017 version, copyright 1996-2018 by Sean Lahman.
+Teams <- read.csv("baseballdatabank-master_2018-03-28/baseballdatabank-master/core/Teams.csv")
+```
+
+```{r}
+# Create 2000-2017 subset of data.
+tm <- Teams[which(Teams$yearID >= '2000' & Teams$yearID <= '2017'),]
+head(tm)
+```
+
+```{r}
+#Count rows of data.
+cat("Total data points:", nrow(tm))
+```
+
+**Attendance**
+
+Below is a histogram of the attendance figures. It shows a more-or-less normal distribution, with a spike at the 3 million mark.
+
+```{r}
+# Print attendance histogram.
+hist(tm$attendance, breaks = 50, xlab="Attendance", main="Major League Attendance 2000 - 2017")
+```
+
+**Initial Models: Attendance, Wins, and Payroll**
+
+For our first models, I will look at two classic relationships: wins vs. attendance and payroll vs. wins. Throughout this analysis, I will use robust standard errors with my linear models, as it is just good standard practice.
+
+```{r}
+# Run linear model,
+lm1 <- lm(attendance ~ W, data = tm)
+
+# Print model output summary.
+summary(lm1)
+
+# Print coefficients report with robust standard errors.
+coeftest(lm1, vcovHC(lm1))
+```
+
+```{r results='asis'}
+# Adjust standard errors.
+cov1         <- vcovHC(lm1)
+robust_se    <- sqrt(diag(cov1))
+
+# Adjust F-statistic .
+wald_results <- waldtest(lm1, vcov = cov1)
+
+# Print stargazer table of linear model output with robust standard errors.
+stargazer(lm1, type="latex",
+          se = list(NULL, robust_se),
+          header = FALSE,
+          title = "Model 1 - Attendance and Wins",
+          model.numbers=FALSE,
+          no.space = TRUE,
+          omit.stat = c("rsq", "f"))
+
+```
+
+```{r}
+lm2 <- lm(W ~ AprPayroll, data = tm)
+coeftest(lm2, vcovHC(lm2))
+```
+
+```{r results='asis'}
+cov2         <- vcovHC(lm2)
+robust_se    <- sqrt(diag(cov2))
+wald_results <- waldtest(lm2, vcov = cov2)
+
+stargazer(lm2, type="latex",
+          se = list(NULL, robust_se),
+          header = FALSE,
+          title = "Model 2 - Wins and Payroll",
+          model.numbers=FALSE,
+          no.space = TRUE,
+          omit.stat = c("rsq", "f"))
+
+```
+
+```{r}
+cat("Additional attendance associated with each win above the baseline:", lm1$coefficients[2],"\nAdditional payroll associated with each additional win over baseline:", 1/lm2$coefficients[2])
+```
+
+This is interesting. I had always assumed that there was an inconsistent relationship between wins and payroll, having watched many high-dollar teams implode. The model here suggests a highly statistically significant relationship between wins and payroll, with a p-value of effectively zero. It is just not a particularly useful one. Each additional win is associated with a $10.8 million payroll increase. The relationship has statistical significance, but no practical significance.
+
+On the other hand, each win is associated with an attendance increase of 28,577. This is also a highly statistically significant result, and this is the relationship I will explore further. The model has an adjusted R-squared value of 0.2259, meaning it only explains 22.6 percent of the variation in attendance. This tells us that there are many additional omitted variables, or that there are many other factors related to attendance than just wins, which is a reasonable assumption anyway.
+
+**World Series and League Pennant Wins**
+
+Now, let's take a look at the same model, accounting for whether a team won the World Series in the preceding year. For posterity, I will first test a model accounting for whether a team wins the World Series in a given year.
+
+```{r}
+lm3 <- lm(attendance ~ W + WSWin, data = tm)
+coeftest(lm3, vcovHC(lm3))
+```
+
+```{r results='asis'}
+cov3         <- vcovHC(lm3)
+robust_se    <- sqrt(diag(cov3))
+wald_results <- waldtest(lm3, vcov = cov3)
+
+stargazer(lm3, type="latex",
+          se = list(NULL, robust_se),
+          header = FALSE,
+          title = "Model 3 - Attendance and Concurrent Year World Series Win",
+          model.numbers=FALSE,
+          no.space = TRUE,
+          omit.stat = c("rsq", "f"))
+
+```
+
+As I suspected at the outset, we do not see a statistically significant effect. Any effect is likely accounted for in the wins variable. Now, we will examine a model showing whether a team won the World Series the previous year.
+
+```{r}
+lm4 <- lm(attendance ~ W + WSWinLastYr, data = tm)
+coeftest(lm4, vcovHC(lm4))
+```
+
+```{r results='asis'}
+cov4         <- vcovHC(lm4)
+robust_se    <- sqrt(diag(cov4))
+wald_results <- waldtest(lm4, vcov = cov4)
+
+stargazer(lm4, type="latex",
+          se = list(NULL, robust_se),
+          header = FALSE,
+          title = "Model 4 - Attendance, Wins, and Preceding Year World Series Win",
+          model.numbers=FALSE,
+          no.space = TRUE,
+          omit.stat = c("rsq", "f"))
+
+```
+
+This is a different story. We get a highly statistically significant result showing an 520,000-person increase in attendance related to putting a World Series champion on the field. What if we add in the preceding year's World Series losers?
+
+```{r}
+lm5 <- lm(attendance ~ W + WSWinLastYr + LgWinWSLossLastYr, data = tm)
+coeftest(lm5, vcovHC(lm5))
+```
+
+```{r results='asis'}
+cov5         <- vcovHC(lm5)
+robust_se    <- sqrt(diag(cov5))
+wald_results <- waldtest(lm5, vcov = cov5)
+
+stargazer(lm5, type="latex",
+          se = list(NULL, robust_se),
+          header = FALSE,
+          title = "Model 5 - Attendance, Wins, and Preceding Year World Series or Pennant Win",
+          model.numbers=FALSE,
+          no.space = TRUE,
+          omit.stat = c("rsq", "f"))
+
+```
+
+There appears to be a relationship between attendance and winning the pennant, but losing the World Series. It is a somewhat smaller, but still substantial, effect: an attendance bump of 314,000. None of the above is a particularly shocking outcome. 
+
+**Top-End Player Acquisition**
+
+Now, let's see what happens when we account for top-end player acquisitions. There will be some gray area in this part, as what qualifies as "top-end" will differ from person to person. My definition of a top-end player acquisition is one involving a superstar or one with a very high dollar value (naturally, these often coincide). I am not looking at how these acquisitions played out, just how they would have been viewed at the time. Essentially, I am trying to quantify the blockbuster. If it is a deal that made a team's fans say "wow" at the time (in a good way), I want it in here. If it made the rival team's fans say "uh-oh", I want it in here. 
+
+Closers are not on this list. Top closer acquisitions certainly excite people, but I am working under the assumption that no one goes to the ballpark to see the closer the way they would for a new clean-up hitter or ace. No one is saying, "Let's go to the game tonight to see Papelbon," unless it's, "Let's go to the game tonight to see if Papelbon chokes out Harper again."
+
+Mid-season acquisitions present a quandary, as, by definition, we cannot look at those as affecting season-long attendance in the same way as off-season acquisitions. I have chosen to break out mid-season acquisitions as a separate indicator variable. In the event that those acquisitions were free agents-to-be, and the acquiring team re-signs that player in the subsequent off-season, I have treated those as new free agent signings. This is not perfect, but there were only a few of those cases, and in most (all?) of them, the fans never expected the team to re-sign the player, so they were met with the excitement of a big free agent signing. This would include Cespedes in 2015/16, Holliday in 2009/10, Manny in 2008/09, and Jason Schmidt in 2001/02 (hey, it was a big deal at the time). Here are the complete lists. This could be an endless debate, so we will proceed under the assumption that people will generally agree on most of these, and that they are sufficient for analysis.
+
+Top-end Offseason Acquisitions
+Team	Year	Player	Mode
+CIN	2000	Ken Griffey Jr.	(Trade)
+DET	2000	Juan Gonzalez	(Trade)
+LAD	2000	Shawn Green	(Trade)
+NYM	2000	Mike Hampton	(Trade)
+BOS	2001	Manny Ramirez	(FA)
+CLE	2001	Juan Gonzalez	(FA)
+COL	2001	Mike Hampton	(FA)
+NYY	2001	Mike Mussina	(FA)
+SEA	2001	Ichiro Suzuki	(FA)
+TEX	2001	Alex Rodriguez	(FA)
+NYY	2002	Jason Giambi	(FA)
+SFG	2002	Jason Schmidt	(Trade/FA)
+NYY	2003	Hideki Matsui	(FA)
+NYY	2003	Jose Contreras	(FA)
+PHI	2003	Jim Thome	(FA)
+PHI	2003	Kevin Millwood	(FA)
+LAA	2004	Vladimir Guerrero	(FA)
+BAL	2004	Miguel Tejada	(FA)
+BOS	2004	Curt Schilling	(Trade)
+HOU	2004	Roger Clemens	(FA)
+NYY	2004	Alex Rodriguez	(Trade)
+ARI	2005	Shawn Green	(Trade)
+DET	2005	Magglio Ordonez	(FA)
+MIL	2005	Carlos Lee	(Trade)
+NYM	2005	Pedro Martinez	(FA)
+NYM	2005	Carlos Betran	(FA)
+NYY	2005	Randy Johnson	(Trade)
+BOS	2006	Josh Beckett	(Trade)
+CHW	2006	Jim Thome	(Trade)
+NYM	2006	Carlos Delgado	(Trade)
+WAS	2006	Alfonso Soriano	(Trade)
+BOS	2007	Daisuke Matsuzaka	(FA)
+BOS	2007	J.D. Drew	(FA)
+CHC	2007	Alfonso Soriano	(FA)
+HOU	2007	Carlos Lee	(FA)
+SFG	2007	Barry Zito	(FA)
+LAA	2008	Torii Hunter	(FA)
+ARI	2008	Dan Haren	(Trade)
+DET	2008	Miguel Cabrera	(Trade)
+NYM	2008	Johan Santana	(Trade)
+LAD	2009	Manny Ramirez	(Trade/FA)
+NYY	2009	Mark Teixeira	(FA)
+NYY	2009	A.J. Burnett	(FA)
+NYY	2009	C.C. Sabathia	(FA)
+PHI	2010	Roy Halladay	(Trade)
+SEA	2010	Cliff Lee	(Trade)
+STL	2010	Matt Holliday	(Trade/FA)
+LAA	2011	Vernon Wells	(Trade)
+BOS	2011	Adrian Gonzalez	(FA)
+BOS	2011	Carl Crawford	(FA)
+MIL	2011	Zack Greinke	(Trade)
+PHI	2011	Cliff Lee	(FA)
+TEX	2011	Adrian Beltre	(FA)
+WAS	2011	Jayson Werth	(FA)
+LAA	2012	Albert Pujols	(FA)
+DET	2012	Prince Fielder	(FA)
+MIA	2012	Jose Reyes	(FA)
+TEX	2012	Yu Darvish	(FA)
+WAS	2012	Gio Gonzalez	(Trade)
+LAA	2013	Josh Hamilton	(FA)
+ATL	2013	Justin Upton	(Trade)
+KAN	2013	James Shields	(Trade)
+NYY	2014	Masahiro Tanaka	(FA)
+NYY	2014	Jacoby Ellsbury	(FA)
+SEA	2014	Robinson Cano	(FA)
+TEX	2014	Prince Fielder	(Trade)
+BOS	2015	Hanley Ramirez	(FA)
+BOS	2015	Pablo Sandoval	(FA)
+CHC	2015	Jon Lester	(FA)
+MIA	2015	Dee Gordon	(Trade)
+SDP	2015	Matt Kemp	(Trade)
+TOR	2015	Josh Donaldson	(Trade)
+WAS	2015	Max Scherzer	(FA)
+ARI	2016	Zack Greinke	(FA)
+BOS	2016	David Price	(FA)
+CHC	2016	Jason Heyward	(FA)
+DET	2016	Justin Upton	(FA)
+DET	2016	Jordan Zimmermann	(FA)
+NYM	2016	Yoenis Cespedes	(Trade/FA)
+CLE	2017	Edwin Encarnacion	(FA)
+
+Top-end Mid-season Acquisitions
+Team	Year	Player	Mode
+ARI	2000	Curt Schilling	(Trade)
+SFG	2001	Jason Schmidt	(Trade/FA)
+HOU	2004	Carlos Beltran	(Trade)
+STL	2004	Larry Walker	(Trade)
+NYY	2006	Bobby Abreu	(Trade)
+ATL	2007	Mark Teixeira	(Trade)
+LAA	2008	Mark Teixeira	(Trade)
+LAD	2008	Manny Ramirez	(Trade/FA)
+MIL	2008	C.C. Sabathia	(Trade)
+CHW	2009	Jake Peavy	(Trade)
+PHI	2009	Cliff Lee	(Trade)
+STL	2009	Matt Holliday	(Trade/FA)
+PHI	2010	Roy Oswalt	(Trade)
+TEX	2010	Cliff Lee	(Trade)
+ANA	2012	Zack Greinke	(Trade)
+LAD	2012	Adrian Gonzalez	(Trade)
+DET	2014	David Price	(Trade)
+NYM	2015	Yoenis Cespedes	(Trade/FA)
+TOR	2015	David Price	(Trade)
+LAD	2017	Yu Darvish	(Trade)
+
+Now, what happens when we incorporate these acquisitions into the model?
+
+```{r}
+lm6 <- lm(attendance ~ W + WSWinLastYr + LgWinWSLossLastYr + TopAcq + MidYrAcq, data = tm)
+coeftest(lm6, vcovHC(lm6))
+```
+
+```{r results='asis'}
+cov6         <- vcovHC(lm6)
+robust_se    <- sqrt(diag(cov6))
+wald_results <- waldtest(lm6, vcov = cov6)
+
+stargazer(lm6, type="latex",
+          se = list(NULL, robust_se),
+          header = FALSE,
+          title = "Model 6 - Attendance, Wins, World Series/Pennant Wins, and Top-End Acquisitions",
+          model.numbers=FALSE,
+          no.space = TRUE,
+          omit.stat = c("rsq", "f"))
+
+```
+
+This is very interesting. Both variables produce highly statistically significant results. A top off-season acquisition is associated with a 307,000-person increase in attendance, while a mid-season acquisition is associated with an even larger attendance spike of 432,000. 
+
+I tested this model with an interaction term between wins and mid-season acquisitions, as logically, a mid-season top-end acquisition would only occur in conjunction with larger win totals. The resulting term was statistically insignificant, so I dropped it from the regression.
+
+**New Ballpark**
+
+For my next model, I will add in the opening of a new ballpark, which I would expect would be associated with an attendance bump.
+
+```{r}
+lm7 <- lm(attendance ~ W + WSWinLastYr + LgWinWSLossLastYr + TopAcq + MidYrAcq + NewPark, data = tm)
+summary(lm7)
+coeftest(lm7, vcovHC(lm7))
+```
+
+```{r results='asis'}
+cov7         <- vcovHC(lm7)
+robust_se    <- sqrt(diag(cov7))
+wald_results <- waldtest(lm7, vcov = cov7)
+
+stargazer(lm7, type="latex",
+          se = list(NULL, robust_se),
+          header = FALSE,
+          title = "Model 7 - Attendance, Wins, World Series/Pennant Wins, Top-End Acquisitions, and New Ballpark",
+          model.numbers=FALSE,
+          no.space = TRUE,
+          omit.stat = c("rsq", "f"))
+
+```
+As expected, we see a sizable attendance increase associated with a new ballpark: 544,000. Despite its small sample size, it is a highly statistically significant effect. I included the full model summary in this case to see whether we had seen any improvement in the Adjusted R-squared value. The improvement is modest (0.299), especially considering this value increases automatically upon the addition of variables. There are clearly many more factors that explain the variance in major league attendance, but these are still have interesting results.
+
+**Conclusions**
+
+As this is an observational study, we cannot draw any causal conclusions from these models. However, there are still some strong relationships here. If we assume, for the sake of argument, that there were causal relationships here, how would a team best proceed in an effort to bolster attendance next year? Well, first off, win the World Series. There we go. Easy. Of course, this is very difficult to do, as is winning the pennant. A team is only going to build a new ballpark once in a generation (for billions of dollars, no less), so that is not what we would call "good business strategy" for increasing attendance alone. 
+
+A top-end acquisition, though, is something within a team's power. Ignoring the literal interpretation of the WAR statistic, let's assume that a top-end player acquisition adds five wins to a team's total. Just estimating that effect using the coefficients in our model gives us the following:
+
+```{r}
+cat("Effect of acquiring a top-end player on attendance:", (5*lm7$coefficients[2]) + lm7$coefficients[5], "\n")
+cat("Associated ticket revenue: $", 32*((5*lm7$coefficients[2]) + lm7$coefficients[5]))
+```
+
+The result is a bump of over 400,000 to attendance figures and over $13 million in ticket revenue in the first year (using a major league average ticket price of \$32). This is before accounting for concessions, merchandise, and, with any luck, playoff appearances. 
+
+
+
