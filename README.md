@@ -24,18 +24,18 @@ I performed my analyses in R, using linear regression models. My starting point 
 * TopAcq: An indicator variable showing whether a team made a top-end player acquisition, via free agency or trade, in the off-season prior to the season in question. I manually compiled this list, and there is some subjectivity to it. My definition of a top-end player acquisition is one involving a superstar or one with a very high dollar value. This variable does not consider how these acquisitions played out, but rather, how they would have been viewed at the time. Below is the complete list of those considered top acquisitions. 
 
 <p align="center">
-  <img src="./images/topacq.jpg" width="800">
+  <img src="./images/topacq.jpg" width="700">
 </p>
 
 * MidAcq: An indicator variable showing whether a team made a top-end player acquisition during a given season. This is equally subjective. In the event that a team traded for a free agent-to-be, and the acquiring team then re-signed that player in the subsequent off-season, I treated it as both a mid-season acquisition and a new free agent signing. In most of these cases, the fans (and the team) did not expect to re-sign the player. Below is the complete list of top-end mid-season acquisitions. “Trade/FA” denotes the player was acquired via trade and then resigned.
 
 <p align="center">
-  <img src="./images/midacq.jpg" width="800">
+  <img src="./images/midacq.jpg" width="300">
 </p>
 
 **Results: Final Model**
 <p align="center">
-  <img src="./images/finalmodel.jpg" width="450">
+  <img src="./images/finalmodel.jpg" width="600">
 </p>
 
 In the final model, we can see strong associations between all newly added variables and attendance. Individual wins, pennant or World Series wins in the preceding season, and opening a new ballpark all accompany expected attendance bumps. Winning is the goal of every team, but it cannot be rigidly controlled by management. Player acquisitions can. The model shows highly statistically significant relationships between both off-season and mid-season top-end free agent acquisitions and attendance (an annual attendance bump of 294,011 and 445,346, respectively). This is before factoring in wins, which have their own positive relationship with attendance. If we assume a top end free agent results in an additional five wins for a team, the associated increase in attendance would be over 400,000, which would amount to more than $13 million in ticket revenue in the first year (using a major league average ticket price of $32). This is before accounting for concessions, merchandise, and, with any luck, playoff appearances.
