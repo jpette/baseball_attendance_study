@@ -30,7 +30,7 @@ I performed my analyses in R, using linear regression models. My starting point 
 * MidAcq: An indicator variable showing whether a team made a top-end player acquisition during a given season. This is equally subjective. In the event that a team traded for a free agent-to-be, and the acquiring team then re-signed that player in the subsequent off-season, I treated it as both a mid-season acquisition and a new free agent signing. In most of these cases, the fans (and the team) did not expect to re-sign the player. Below is the complete list of top-end mid-season acquisitions. “Trade/FA” denotes the player was acquired via trade and then resigned.
 
 <p align="center">
-  <img src="./images/midacq.jpg" width="300">
+  <img src="./images/midacq.jpg" width="200">
 </p>
 
 **Results: Final Model**
